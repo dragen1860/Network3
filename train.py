@@ -100,7 +100,7 @@ def main():
 	argparser.add_argument('-n', help='n way')
 	argparser.add_argument('-k', help='k shot')
 	argparser.add_argument('-b', help='batch size')
-	argparser.add_argument('-l', help='learning rate', default=1e-3)
+	argparser.add_argument('-l', help='learning rate', default=1e-4)
 	argparser.add_argument('-t', help='threshold to test all episodes', default=1)
 	args = argparser.parse_args()
 	n_way = int(args.n)
@@ -121,7 +121,7 @@ def main():
 			threshold = 0.991
 
 	db = OmniglotNShot('dataset', batchsz=batchsz, n_way=n_way, k_shot=k_shot, k_query=k_query, imgsz=imgsz)
-	print('Omniglot: rotate!  %d-way %d-shot  lr:%f' % (n_way, k_shot, lr))
+	print('Omniglot: rotate!  %d-way %d-shot  lr:%f, threshold:%f' % (n_way, k_shot, lr, threshold))
 	net = NaiveRN(n_way, k_shot, imgsz).cuda()
 	print(net)
 	mdl_file = 'ckpt/omni%d%d.mdl'%(n_way, k_shot)
@@ -150,8 +150,6 @@ def main():
 			accuracy, _ = evaluation(net, batchsz, n_way, k_shot, imgsz, 100, threshold, mdl_file)
 			scheduler.step(accuracy)
 
-
-
 		# 2. train
 		support_x, support_y, query_x, query_y = db.get_batch('train')
 		support_x = Variable(torch.from_numpy(support_x).float().transpose(2, 4).transpose(3, 4).repeat(1, 1, 3, 1, 1)).cuda()
@@ -164,6 +162,7 @@ def main():
 
 		optimizer.zero_grad()
 		loss.backward()
+		torch.nn.utils.clip_grad_norm(net.parameters(), 10)
 		optimizer.step()
 
 		# 3. print

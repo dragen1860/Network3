@@ -75,7 +75,7 @@ class NaiveRN(nn.Module):
 		                       nn.Dropout(),
 		                       nn.ReLU(inplace=True),
 		                       nn.Linear(256, 64),
-		                       nn.BatchNorm1d(64),
+		                       # nn.BatchNorm1d(64),
 		                       nn.ReLU(inplace=True),
 		                       nn.Linear(64, 1),
 		                       nn.Sigmoid())
@@ -104,13 +104,13 @@ class NaiveRN(nn.Module):
 		# [b, setsz, c_, h, w] => [b*setsz, c_, h, w] => [b*setsz, c, d, d] => [b, setsz, c, d, d]
 		support_xf = self.repnet(support_x.view(batchsz * setsz, c_, h, w)).view(batchsz, setsz, c, d, d)
 
-		# # sum over k_shot imgs to ensemble
-		# # [b, setsz, c, d, d] => [b, n_way, k_shot, c, d, d], sum over k_shot dim
-		# # => [b, n_way, c, d, d]
-		# support_xf = support_xf.view(batchsz, self.n_way, self.k_shot, c, d, d).sum(2)
-		# setsz = self.n_way
-		# # [b, n_way*k_shot] => [b, n_way]
-		# support_y = support_y[:, ::self.k_shot]
+		# sum over k_shot imgs to ensemble
+		# [b, setsz, c, d, d] => [b, n_way, k_shot, c, d, d], sum over k_shot dim
+		# => [b, n_way, c, d, d]
+		support_xf = support_xf.view(batchsz, self.n_way, self.k_shot, c, d, d).sum(2)
+		setsz = self.n_way
+		# [b, n_way*k_shot] => [b, n_way]
+		support_y = support_y[:, ::self.k_shot]
 
 		# [b, querysz, c_, h, w] => [b*querysz, c_, h, w] => [b*querysz, c, d, d] => [b, querysz, c, d, d]
 		query_xf = self.repnet(query_x.view(batchsz * querysz, c_, h, w)).view(batchsz, querysz, c, d, d)
@@ -157,21 +157,29 @@ class NaiveRN(nn.Module):
 			return loss
 
 		else:
-			# [b, querysz, setsz]
-			rn_score_np = score.cpu().data.numpy()
-			pred = []
-			# [b, setsz]
-			support_y_np = support_y.cpu().data.numpy()
-			for i, batch in enumerate(rn_score_np):
-				for j, query in enumerate(batch):
-					# query: [setsz]
-					sim = []  # [n_way]
-					for way in range(self.n_way):
-						sim.append(np.sum(query[way * self.k_shot: (way + 1) * self.k_shot]))
-					idx = np.array(sim).argmax()
-					pred.append(support_y_np[i, idx * self.k_shot])
-			# pred: [b, querysz]
-			pred = Variable(torch.from_numpy(np.array(pred).reshape((batchsz, querysz)))).cuda()
+			# select the highest score element
+			# [b, querysz, setsz] => [b, querysz]
+			_, indices = score.max(dim=2)
+			# support_y: [b, querysz]
+			# indices: [b, querysz]
+			# pred: [b, querysz], global true label
+			pred = torch.gather(support_y, dim=1, index=indices)
+
+			# # [b, querysz, setsz]
+			# rn_score_np = score.cpu().data.numpy()
+			# pred = []
+			# # [b, setsz]
+			# support_y_np = support_y.cpu().data.numpy()
+			# for i, batch in enumerate(rn_score_np):
+			# 	for j, query in enumerate(batch):
+			# 		# query: [setsz]
+			# 		sim = []  # [n_way]
+			# 		for way in range(self.n_way):
+			# 			sim.append(np.sum(query[way * self.k_shot: (way + 1) * self.k_shot]))
+			# 		idx = np.array(sim).argmax()
+			# 		pred.append(support_y_np[i, idx * self.k_shot])
+			# # pred: [b, querysz]
+			# pred = Variable(torch.from_numpy(np.array(pred).reshape((batchsz, querysz)))).cuda()
 
 			correct = torch.eq(pred, query_y).sum()
 			return pred, correct

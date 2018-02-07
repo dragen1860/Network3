@@ -77,7 +77,7 @@ class OmniglotNShot():
 		self.std = np.std(self.x_train)
 		self.max = np.max(self.x_train)
 		self.min = np.min(self.x_train)
-		print("before norm:", "mean", self.mean, "max", self.max, "min", self.min, "std", self.std)
+		# print("before norm:", "mean", self.mean, "max", self.max, "min", self.min, "std", self.std)
 		self.x_train = (self.x_train - self.mean) / self.std
 		self.x_test = (self.x_test - self.mean) / self.std
 
@@ -85,7 +85,7 @@ class OmniglotNShot():
 		self.std = np.std(self.x_train)
 		self.max = np.max(self.x_train)
 		self.min = np.min(self.x_train)
-		print("after norm:", "mean", self.mean, "max", self.max, "min", self.min, "std", self.std)
+		# print("after norm:", "mean", self.mean, "max", self.max, "min", self.min, "std", self.std)
 
 	def load_data_cache(self, data_pack):
 		"""
@@ -99,7 +99,7 @@ class OmniglotNShot():
 		data_cache = []
 
 		# print('preload next 50 caches of batchsz of batch.')
-		for sample in range(50):  # num of episodes
+		for sample in range(100):  # num of episodes
 			# (batch, setsz, imgs)
 			support_x = np.zeros((self.batchsz, setsz, self.resize, self.resize, 1))
 			# (batch, setsz)
