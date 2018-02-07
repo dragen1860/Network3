@@ -163,13 +163,14 @@ class OmniglotNShot():
 		k = int(np.random.uniform(low=0, high=4)) # 0 - 3
 		# Iterate over the sequence. Extract batches.
 
-		# for i in np.arange(x_support_set.shape[0]):
-		# 	# batchsz, setsz, c, h, w
-		# 	x_support_set[i, :, :, :, :] = self.__rotate_batch(x_support_set[i, :, :, :, :], k)
-		#
-		# # Rotate all the batch of the target images
-		# for i in np.arange(x_target.shape[0]):
-		# 	x_target[i, :, :, :, :] = self.__rotate_batch(x_target[i, :, :, :, :], k)
+		if mode == 'train':
+			for i in np.arange(x_support_set.shape[0]):
+				# batchsz, setsz, c, h, w
+				x_support_set[i, :, :, :, :] = self.__rotate_batch(x_support_set[i, :, :, :, :], k)
+
+			# Rotate all the batch of the target images
+			for i in np.arange(x_target.shape[0]):
+				x_target[i, :, :, :, :] = self.__rotate_batch(x_target[i, :, :, :, :], k)
 
 		return x_support_set, y_support_set, x_target, y_target
 
