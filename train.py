@@ -158,11 +158,12 @@ def main():
 		query_y = Variable(torch.from_numpy(query_y).int()).cuda()
 
 		loss = net(support_x, support_y, query_x,  query_y)
+		loss /= support_y.size(0)
 		total_train_loss += loss.data[0]
 
 		optimizer.zero_grad()
 		loss.backward()
-		torch.nn.utils.clip_grad_norm(net.parameters(), 10)
+		# torch.nn.utils.clip_grad_norm(net.parameters(), 10)
 		optimizer.step()
 
 		# 3. print
