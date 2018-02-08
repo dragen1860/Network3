@@ -8,6 +8,19 @@ from torch.optim import lr_scheduler
 import argparse
 
 import scipy.stats, sys
+from tensorbardX import SummaryWriter
+import pickle
+
+global_train_acc_buff = 0
+global_train_loss_buff = 0
+global_test_acc_buff = 0
+global_test_loss_buff = 0
+global_buff = []
+
+def write2file():
+	global_buff.append([global_train_loss_buff, global_train_acc_buff, global_test_loss_buff, global_test_acc_buff])
+	with open("omni%d%d.pkl"%(n_way, k_shot), "wb") as fp:  
+		pickle.dump(global_buff, fp)
 
 
 def mean_confidence_interval(accs, confidence = 0.95):
@@ -52,6 +65,7 @@ def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file
 		# we don't need the total acc on 600 episodes, but we need the acc per sets of 15*nway setsz.
 		total_correct = 0
 		total_num = 0
+		total_loss = 0
 		for query_x_mini, query_y_mini in zip(query_x_b, query_y_b):
 			# print('query_x_mini', query_x_mini.size(), 'query_y_mini', query_y_mini.size())
 			pred, correct = net(support_x, support_y, query_x_mini.contiguous(), query_y_mini, False)
@@ -60,6 +74,8 @@ def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file
 			preds.append(pred)
 			total_correct += correct.data[0]
 			total_num += query_y_mini.size(0) * query_y_mini.size(1)
+
+			total_loss += torch.pow(query_y_mini - pred, 2).sum()
 		# # 15 * [b, nway] => [b, 15*nway]
 		# preds = torch.cat(preds, dim= 1)
 		acc = total_correct / total_num
@@ -92,6 +108,15 @@ def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file
 		torch.save(net.state_dict(), mdl_file)
 		print('Saved to checkpoint:', mdl_file)
 
+
+	total_loss = total_loss / episode_num
+	tb.add_scalar('test-acc', accuracy)
+	tb.add_scalar('test-loss', total_loss)
+	global_test_loss_buff = total_loss
+	global_test_acc_buff = accuracy
+	write2file()
+
+
 	return accuracy, sem
 
 
@@ -120,6 +145,8 @@ def main():
 		elif n_way == 20 and k_shot == 5:
 			threshold = 0.991
 
+	tb = SummaryWriter('runs')
+			
 	db = OmniglotNShot('dataset', batchsz=batchsz, n_way=n_way, k_shot=k_shot, k_query=k_query, imgsz=imgsz)
 	print('Omniglot: rotate!  %d-way %d-shot  lr:%f, threshold:%f' % (n_way, k_shot, lr, threshold))
 	net = NaiveRN(n_way, k_shot, imgsz).cuda()
@@ -157,7 +184,7 @@ def main():
 		support_y = Variable(torch.from_numpy(support_y).int()).cuda()
 		query_y = Variable(torch.from_numpy(query_y).int()).cuda()
 
-		loss = net(support_x, support_y, query_x,  query_y)
+		loss, correct = net(support_x, support_y, query_x,  query_y)
 		loss /= support_y.size(0)
 		total_train_loss += loss.data[0]
 
@@ -167,11 +194,16 @@ def main():
 		optimizer.step()
 
 		# 3. print
-		if step % 20 == 0 and step != 0:
+		if step % 40 == 0 and step != 0:
 			print('%d-way %d-shot %d batch> step:%d, loss:%f' % (
 				n_way, k_shot, batchsz, step, total_train_loss))
 			total_train_loss = 0
-
+			acc = correct.data[0] / support_y.size(0) / support_y.size(1)
+			tb.add_scalar('train-acc', acc)
+			tb.add_scalar('train-loss', loss.data[0])
+			global_train_loss_buff = loss.data[0]
+			global_train_acc_buff = acc
+			write2file()
 
 
 

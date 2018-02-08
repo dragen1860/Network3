@@ -154,7 +154,13 @@ class NaiveRN(nn.Module):
 		# label: [b, querysz, setsz]
 		if train:
 			loss = torch.pow(label - score, 2).sum() / batchsz
-			return loss
+
+
+			_, indices = score.max(dim=2)
+			pred = torch.gather(support_y, dim=1, index=indices)
+			correct = torch.eq(pred, query_y).sum()
+
+			return loss, correct
 
 		else:
 			# select the highest score element
