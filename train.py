@@ -8,7 +8,7 @@ from torch.optim import lr_scheduler
 import argparse
 
 import scipy.stats, sys
-from tensorbardX import SummaryWriter
+from tensorboardX import SummaryWriter
 import pickle
 
 global_train_acc_buff = 0
@@ -32,7 +32,7 @@ def mean_confidence_interval(accs, confidence = 0.95):
 
 # save best acc info, to save the best model to ckpt.
 best_accuracy = 0
-def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file):
+def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file, tb):
 	"""
 	obey the expriment setting of MAML and Learning2Compare, we randomly sample 600 episodes and 15 query images per query
 	set.
@@ -75,7 +75,7 @@ def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file
 			total_correct += correct.data[0]
 			total_num += query_y_mini.size(0) * query_y_mini.size(1)
 
-			total_loss += torch.pow(query_y_mini - pred, 2).sum()
+			total_loss += torch.pow(query_y_mini.float() - pred.float(), 2).sum()
 		# # 15 * [b, nway] => [b, 15*nway]
 		# preds = torch.cat(preds, dim= 1)
 		acc = total_correct / total_num
@@ -174,7 +174,7 @@ def main():
 
 		# 1. test
 		if step % 400 == 0:
-			accuracy, _ = evaluation(net, batchsz, n_way, k_shot, imgsz, 100, threshold, mdl_file)
+			accuracy, _ = evaluation(net, batchsz, n_way, k_shot, imgsz, 100, threshold, mdl_file, tb)
 			scheduler.step(accuracy)
 
 		# 2. train
