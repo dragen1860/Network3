@@ -17,7 +17,7 @@ global_test_acc_buff = 0
 global_test_loss_buff = 0
 global_buff = []
 
-def write2file():
+def write2file(n_way, k_shot):
 	global_buff.append([global_train_loss_buff, global_train_acc_buff, global_test_loss_buff, global_test_acc_buff])
 	with open("omni%d%d.pkl"%(n_way, k_shot), "wb") as fp:  
 		pickle.dump(global_buff, fp)
@@ -114,7 +114,7 @@ def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file
 	tb.add_scalar('test-loss', total_loss)
 	global_test_loss_buff = total_loss
 	global_test_acc_buff = accuracy
-	write2file()
+	write2file(n_way, k_shot)
 
 
 	return accuracy, sem
@@ -203,7 +203,7 @@ def main():
 			tb.add_scalar('train-loss', loss.data[0])
 			global_train_loss_buff = loss.data[0]
 			global_train_acc_buff = acc
-			write2file()
+			write2file(n_way, k_shot)
 
 
 
