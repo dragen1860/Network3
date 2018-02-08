@@ -46,6 +46,7 @@ def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file
 	accs = []
 	episode_num = 0 # record tested num of episodes
 
+	total_loss = 0
 	for i in range( 600 // batchsz):
 		support_x, support_y, query_x, query_y = db.get_batch('test')
 		support_x = Variable(torch.from_numpy(support_x).float().transpose(2, 4).transpose(3, 4).repeat(1, 1, 3, 1, 1)).cuda()
@@ -65,17 +66,16 @@ def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file
 		# we don't need the total acc on 600 episodes, but we need the acc per sets of 15*nway setsz.
 		total_correct = 0
 		total_num = 0
-		total_loss = 0
 		for query_x_mini, query_y_mini in zip(query_x_b, query_y_b):
 			# print('query_x_mini', query_x_mini.size(), 'query_y_mini', query_y_mini.size())
-			pred, correct = net(support_x, support_y, query_x_mini.contiguous(), query_y_mini, False)
+			pred, correct, loss = net(support_x, support_y, query_x_mini.contiguous(), query_y_mini, False)
 			correct = correct.sum() # multi-gpu
 			# pred: [b, nway]
 			preds.append(pred)
 			total_correct += correct.data[0]
 			total_num += query_y_mini.size(0) * query_y_mini.size(1)
 
-			total_loss += torch.pow(query_y_mini.float() - pred.float(), 2).sum()
+			total_loss += loss.data[0] / (n_way*k_query)
 		# # 15 * [b, nway] => [b, 15*nway]
 		# preds = torch.cat(preds, dim= 1)
 		acc = total_correct / total_num
@@ -109,9 +109,11 @@ def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file
 		print('Saved to checkpoint:', mdl_file)
 
 
-	total_loss = total_loss / episode_num
+	total_loss = total_loss / episode_num / k_query
 	tb.add_scalar('test-acc', accuracy)
 	tb.add_scalar('test-loss', total_loss)
+
+	global global_test_loss_buff, global_test_acc_buff
 	global_test_loss_buff = total_loss
 	global_test_acc_buff = accuracy
 	write2file(n_way, k_shot)
@@ -122,10 +124,10 @@ def evaluation(net, batchsz, n_way, k_shot, imgsz, episodesz, threhold, mdl_file
 
 def main():
 	argparser = argparse.ArgumentParser()
-	argparser.add_argument('-n', help='n way')
-	argparser.add_argument('-k', help='k shot')
-	argparser.add_argument('-b', help='batch size')
-	argparser.add_argument('-l', help='learning rate', default=1e-4)
+	argparser.add_argument('-n', help='n way', default=5)
+	argparser.add_argument('-k', help='k shot', default=1)
+	argparser.add_argument('-b', help='batch size', default=1)
+	argparser.add_argument('-l', help='learning rate', default=1e-3)
 	argparser.add_argument('-t', help='threshold to test all episodes', default=1)
 	args = argparser.parse_args()
 	n_way = int(args.n)
@@ -184,8 +186,7 @@ def main():
 		support_y = Variable(torch.from_numpy(support_y).int()).cuda()
 		query_y = Variable(torch.from_numpy(query_y).int()).cuda()
 
-		loss, correct = net(support_x, support_y, query_x,  query_y)
-		loss /= support_y.size(0)
+		loss, correct = net(support_x, support_y, query_x,  query_y) 
 		total_train_loss += loss.data[0]
 
 		optimizer.zero_grad()
@@ -200,8 +201,10 @@ def main():
 			total_train_loss = 0
 			acc = correct.data[0] / support_y.size(0) / support_y.size(1)
 			tb.add_scalar('train-acc', acc)
-			tb.add_scalar('train-loss', loss.data[0])
-			global_train_loss_buff = loss.data[0]
+			tb.add_scalar('train-loss', loss.data[0] / (n_way*k_shot))
+			
+			global global_train_loss_buff, global_train_acc_buff
+			global_train_loss_buff = loss.data[0]/ (n_way*k_shot)
 			global_train_acc_buff = acc
 			write2file(n_way, k_shot)
 

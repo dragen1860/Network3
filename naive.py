@@ -188,4 +188,6 @@ class NaiveRN(nn.Module):
 			# pred = Variable(torch.from_numpy(np.array(pred).reshape((batchsz, querysz)))).cuda()
 
 			correct = torch.eq(pred, query_y).sum()
-			return pred, correct
+			loss = torch.pow(label - score, 2).sum() / batchsz
+
+			return pred, correct, loss
